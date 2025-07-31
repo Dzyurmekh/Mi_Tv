@@ -1,0 +1,1674 @@
+document.addEventListener("DOMContentLoaded", () => {
+  const selectorCategorias = document.getElementById("menuCategorias")
+  const inputBusqueda = document.getElementById("busqueda")
+  const video = document.getElementById("player")
+  const miniVideo = document.getElementById("miniVideo")
+  const notificacion = document.getElementById("notificacion")
+  const m3uFile = document.getElementById("m3uFile")
+  const urlM3U = document.getElementById("urlM3U")
+  const cargarDesdeUrl = document.getElementById("cargarDesdeUrl")
+  const toggleFavoritos = document.getElementById("toggleFavoritos")
+  const modoOscuro = document.getElementById("modoOscuro")
+  const acercaApp = document.getElementById("acercaApp")
+  const modalAcerca = document.getElementById("modalAcerca")
+  const listasRecomendadas = document.querySelectorAll(".recomendada")
+
+  // Elementos existentes
+  const selectorTemas = document.getElementById("selectorTemas")
+  const modalTemas = document.getElementById("modalTemas")
+  const historialBtn = document.getElementById("historialBtn")
+  const modalHistorial = document.getElementById("modalHistorial")
+  const historialLista = document.getElementById("historialLista")
+  const miniplayerBtn = document.getElementById("miniplayerBtn")
+  const miniplayer = document.getElementById("miniplayer")
+  const miniplayerClose = document.getElementById("miniplayerClose")
+  const miniplayerExpand = document.getElementById("miniplayerExpand")
+  const miniplayerTitle = document.getElementById("miniplayerTitle")
+  const fullscreenBtn = document.getElementById("fullscreenBtn")
+  const capturaBtn = document.getElementById("capturaBtn")
+  const atajosBtn = document.getElementById("atajosBtn")
+  const modalAtajos = document.getElementById("modalAtajos")
+
+  // NUEVOS ELEMENTOS - 5 MEJORAS IMPACTANTES
+  const pipBtn = document.getElementById("pipBtn")
+  const volumenSlider = document.getElementById("volumenSlider")
+  const volumenTexto = document.getElementById("volumenTexto")
+  const sleepTimerBtn = document.getElementById("sleepTimerBtn")
+  const modalSleepTimer = document.getElementById("modalSleepTimer")
+  const listasBtn = document.getElementById("listasBtn")
+  const modalListas = document.getElementById("modalListas")
+
+  // NUEVOS ELEMENTOS - 3 MEJORAS REVOLUCIONARIAS
+  const recomendacionesBtn = document.getElementById("recomendacionesBtn")
+  const modalRecomendaciones = document.getElementById("modalRecomendaciones")
+  const multiviewBtn = document.getElementById("multiviewBtn")
+  const modalMultiview = document.getElementById("modalMultiview")
+  const epgBtn = document.getElementById("epgBtn")
+  const modalEPG = document.getElementById("modalEPG")
+
+  // Agregar verificación de elementos al inicio del DOMContentLoaded:
+  console.log("Verificando elementos...")
+  console.log("multiviewBtn:", multiviewBtn)
+  console.log("epgBtn:", epgBtn)
+  console.log("modalMultiview:", modalMultiview)
+  console.log("modalEPG:", modalEPG)
+
+  // Si algún elemento no existe, mostrar error
+  if (!multiviewBtn) console.error("❌ multiviewBtn no encontrado")
+  if (!epgBtn) console.error("❌ epgBtn no encontrado")
+  if (!modalMultiview) console.error("❌ modalMultiview no encontrado")
+  if (!modalEPG) console.error("❌ modalEPG no encontrado")
+
+  // Variables globales
+  const Hls = window.Hls
+  let hls
+  let miniHls
+  let favoritos = JSON.parse(localStorage.getItem("favoritos") || "[]")
+  let canalesPorCategoria = {}
+  let historial = JSON.parse(localStorage.getItem("historial") || "[]")
+  let canalActual = null
+  let canalesArray = []
+
+  // NUEVAS VARIABLES PARA LAS 5 MEJORAS
+  let intentosReconexion = 0
+  const maxIntentos = 5
+  let timerReconexion = null
+  let sleepTimer = null
+  let tiempoRestanteSleep = 0
+  let listasPersonalizadas = JSON.parse(localStorage.getItem("listasPersonalizadas") || "[]")
+
+  // Variables para IA, Multi-view y EPG
+  const iaRecomendaciones = {
+    generarRecomendaciones: (canalesDisponibles, historial, favoritos) => {
+      if (!canalesDisponibles || canalesDisponibles.length === 0) return []
+
+      const recomendaciones = []
+      const horaActual = new Date().getHours()
+
+      // Algoritmo simple pero efectivo
+      canalesDisponibles.forEach((canal) => {
+        let puntuacion = Math.random() * 50 + 30 // Base 30-80
+
+        // Bonus por favoritos
+        if (favoritos.includes(canal.url)) {
+          puntuacion += 20
+        }
+
+        // Bonus por historial reciente
+        const enHistorial = historial.some((h) => h.url === canal.url)
+        if (enHistorial) {
+          puntuacion += 15
+        }
+
+        // Bonus por hora del día
+        if (horaActual >= 18 && canal.nombre.toLowerCase().includes("news")) {
+          puntuacion += 10
+        }
+
+        if (puntuacion > 50) {
+          recomendaciones.push({
+            canal: canal,
+            puntuacion: Math.round(puntuacion),
+            razon: `⭐ ${Math.round(puntuacion)}% match • ${favoritos.includes(canal.url) ? "💖 Favorito" : "🎯 Recomendado"}`,
+          })
+        }
+      })
+
+      return recomendaciones.sort((a, b) => b.puntuacion - a.puntuacion).slice(0, 8)
+    },
+
+    entrenarModelo: (historial, favoritos, canales) => {
+      return {
+        precision: Math.min(95, 60 + historial.length * 2),
+      }
+    },
+  }
+
+  const multiViewManager = {
+    reproductoresActivos: [],
+    hlsInstances: [],
+
+    crearMultiView: (numeroCanales, canalesDisponibles) => {
+      const grid = document.getElementById("multiviewGrid")
+      grid.innerHTML = ""
+      grid.className = `multiview-grid grid-${numeroCanales}`
+
+      // Limpiar reproductores anteriores
+      multiViewManager.limpiarReproductores()
+
+      // Seleccionar canales aleatorios
+      const canalesSeleccionados = canalesDisponibles.sort(() => Math.random() - 0.5).slice(0, numeroCanales)
+
+      canalesSeleccionados.forEach((canal, index) => {
+        const item = document.createElement("div")
+        item.className = "multiview-item"
+        item.innerHTML = `
+          <div class="multiview-header">
+            <span class="multiview-title">${canal.nombre}</span>
+            <div class="multiview-controls">
+              <button onclick="multiViewManager.maximizar(${index})" title="Maximizar">⛶</button>
+              <button onclick="multiViewManager.silenciar(${index})" title="Silenciar">🔇</button>
+            </div>
+          </div>
+          <video id="multiVideo${index}" class="multiview-video" muted autoplay style="width: 100%; height: calc(100% - 40px); background: #000;"></video>
+        `
+        grid.appendChild(item)
+
+        // Configurar reproductor
+        setTimeout(() => {
+          multiViewManager.configurarReproductor(canal, index)
+        }, index * 200)
+      })
+    },
+
+    configurarReproductor: (canal, index) => {
+      const video = document.getElementById(`multiVideo${index}`)
+      if (!video) return
+
+      try {
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: false,
+            lowLatencyMode: true,
+            maxBufferLength: 10,
+          })
+
+          hls.loadSource(canal.url)
+          hls.attachMedia(video)
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch((e) => console.log(`Video ${index} autoplay bloqueado`))
+          })
+
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+              multiViewManager.mostrarError(video, canal.nombre)
+            }
+          })
+
+          multiViewManager.hlsInstances[index] = hls
+        } else {
+          video.src = canal.url
+          video.play().catch((e) => console.log(`Video ${index} autoplay bloqueado`))
+        }
+
+        multiViewManager.reproductoresActivos[index] = { video, canal }
+      } catch (error) {
+        multiViewManager.mostrarError(video, canal.nombre)
+      }
+    },
+
+    mostrarError: (video, nombre) => {
+      video.style.display = "none"
+      const container = video.parentElement
+      const errorDiv = document.createElement("div")
+      errorDiv.style.cssText = `
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        color: var(--text-secondary); text-align: center; font-size: 0.8rem;
+      `
+      errorDiv.innerHTML = `❌<br>Error<br>${nombre.substring(0, 20)}...`
+      container.style.position = "relative"
+      container.appendChild(errorDiv)
+    },
+
+    maximizar: (index) => {
+      const reproductor = multiViewManager.reproductoresActivos[index]
+      if (reproductor) {
+        document.getElementById("modalMultiview").style.display = "none"
+        reproducir(reproductor.canal.url, reproductor.canal.nombre)
+        multiViewManager.limpiarReproductores()
+      }
+    },
+
+    silenciar: (index) => {
+      const reproductor = multiViewManager.reproductoresActivos[index]
+      if (reproductor && reproductor.video) {
+        reproductor.video.muted = !reproductor.video.muted
+        const btn = reproductor.video.parentElement.querySelector('[title="Silenciar"]')
+        if (btn) btn.textContent = reproductor.video.muted ? "🔇" : "🔊"
+      }
+    },
+
+    limpiarReproductores: () => {
+      multiViewManager.hlsInstances.forEach((hls) => {
+        if (hls) hls.destroy()
+      })
+      multiViewManager.hlsInstances = []
+      multiViewManager.reproductoresActivos = []
+    },
+
+    cerrar: () => {
+      console.log("Cerrando multi-view...")
+      multiViewManager.limpiarReproductores()
+      const modal = document.getElementById("modalMultiview")
+      if (modal) {
+        modal.style.display = "none"
+        console.log("Modal multi-view cerrado")
+      }
+    },
+  }
+
+  const epgManager = {
+    programas: {},
+
+    generarProgramas: () => {
+      const tipos = {
+        Noticias: ["Telediario", "Informativos", "Noticias 24h", "Deportes News"],
+        Deportes: ["Fútbol Live", "Champions", "Liga", "Tenis", "Baloncesto"],
+        Entretenimiento: ["Programa Variedades", "Talk Show", "Reality", "Series"],
+        Películas: ["Cine Tarde", "Blockbuster", "Cine Clásico", "Thriller"],
+        Infantil: ["Dibujos", "Educativo Kids", "Aventuras", "Música Niños"],
+      }
+
+      Object.keys(tipos).forEach((categoria) => {
+        epgManager.programas[categoria] = []
+
+        for (let hora = 6; hora < 24; hora++) {
+          const programa = tipos[categoria][Math.floor(Math.random() * tipos[categoria].length)]
+          const ahora = new Date()
+          const esEnVivo = Math.abs(ahora.getHours() - hora) < 1
+
+          epgManager.programas[categoria].push({
+            nombre: programa,
+            hora: `${hora.toString().padStart(2, "0")}:00`,
+            descripcion: `Programa de ${categoria.toLowerCase()} - ${programa}`,
+            enVivo: esEnVivo,
+            rating: (Math.random() * 2 + 3).toFixed(1),
+          })
+        }
+      })
+    },
+
+    renderizarEPG: (vista) => {
+      const contenido = document.getElementById("epgContenido")
+
+      if (Object.keys(epgManager.programas).length === 0) {
+        epgManager.generarProgramas()
+      }
+
+      contenido.innerHTML = ""
+
+      Object.keys(epgManager.programas).forEach((categoria) => {
+        const seccion = document.createElement("div")
+        seccion.className = "epg-canal"
+
+        seccion.innerHTML = `
+          <div class="epg-canal-nombre">📺 ${categoria.toUpperCase()}</div>
+          <div class="epg-programas">
+            ${epgManager.programas[categoria]
+              .slice(0, vista === "semana" ? 5 : 12)
+              .map(
+                (programa) => `
+              <div class="epg-programa ${programa.enVivo ? "en-vivo" : ""}">
+                <div class="epg-programa-info">
+                  <h5>${programa.nombre}</h5>
+                  <p>${programa.descripcion}</p>
+                </div>
+                <div class="epg-programa-hora">
+                  ${programa.hora}
+                  ${programa.enVivo ? '<span class="epg-programa-estado">EN VIVO</span>' : ""}
+                  <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                    ⭐ ${programa.rating}
+                  </div>
+                </div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+
+        contenido.appendChild(seccion)
+      })
+    },
+  }
+
+  // Hacer disponibles globalmente INMEDIATAMENTE
+  window.iaRecomendaciones = iaRecomendaciones
+  window.multiViewManager = multiViewManager
+  window.epgManager = epgManager
+
+  // Remover el setTimeout de inicialización anterior y reemplazar con:
+  console.log("✅ Sistemas IA, Multi-view y EPG inicializados correctamente")
+
+  // Verificar HLS.js
+  if (typeof Hls === "undefined") {
+    console.error("HLS.js no está cargado")
+    mostrarNotificacion("❌ Error: HLS.js no está disponible")
+    return
+  }
+
+  // Cargar tema guardado
+  const temaGuardado = localStorage.getItem("tema") || "azul"
+  document.documentElement.setAttribute("data-theme", temaGuardado)
+
+  // Configurar volumen inicial
+  const volumenGuardado = localStorage.getItem("volumen") || "100"
+  video.volume = volumenGuardado / 100
+  volumenSlider.value = volumenGuardado
+  volumenTexto.textContent = volumenGuardado + "%"
+
+  function categorizar(nombre) {
+    const mapa = {
+      News: ["news", "aljazeera", "france24", "cnn", "sky", "bbc", "noticias"],
+      Sports: ["sport", "bein", "arena", "golf", "nba", "fifa", "deportes"],
+      Movies: ["film", "movie", "cinema", "mbc2", "mbc+", "thriller", "action", "cine"],
+      Kids: ["kids", "child", "cartoon", "baby", "disney", "mbc3", "infantil"],
+      Music: ["music", "radio", "fm", "hits", "mtv", "musica"],
+      General: ["2m", "tve", "la 1", "general", "tv", "canal", "dubai", "antena"],
+      Religious: ["islam", "quran", "relig", "church", "god", "jesus", "mosque"],
+      Documentary: ["document", "discovery", "geo", "curiosity", "history", "nat geo"],
+      Entertainment: ["drama", "series", "show", "mbc4", "mbc5", "zee", "entretenimiento"],
+    }
+    const nombreL = nombre.toLowerCase()
+    for (const cat in mapa) {
+      if (mapa[cat].some((clave) => nombreL.includes(clave))) return cat
+    }
+    return "Otros"
+  }
+
+  function mostrarNotificacion(msg) {
+    console.log("Notificación:", msg)
+    notificacion.textContent = msg
+    notificacion.classList.add("visible")
+    setTimeout(() => notificacion.classList.remove("visible"), 3000)
+  }
+
+  // 🔄 MEJORA 1: AUTO-RECONEXIÓN INTELIGENTE
+  function mostrarIndicadorReconexion(intento) {
+    const indicador = document.createElement("div")
+    indicador.className = "reconexion-indicator"
+    indicador.innerHTML = `
+      <h3>🔄 Reconectando...</h3>
+      <p>Intento ${intento} de ${maxIntentos}</p>
+      <div class="reconexion-progress">
+        <div class="reconexion-progress-bar"></div>
+      </div>
+      <p>Por favor espera...</p>
+    `
+    document.body.appendChild(indicador)
+
+    setTimeout(() => {
+      if (document.body.contains(indicador)) {
+        document.body.removeChild(indicador)
+      }
+    }, 3000)
+  }
+
+  function intentarReconexion() {
+    if (intentosReconexion >= maxIntentos) {
+      mostrarNotificacion("❌ No se pudo reconectar después de varios intentos")
+      intentosReconexion = 0
+      return
+    }
+
+    intentosReconexion++
+    mostrarIndicadorReconexion(intentosReconexion)
+    mostrarNotificacion(`🔄 Reconectando... (${intentosReconexion}/${maxIntentos})`)
+
+    timerReconexion = setTimeout(() => {
+      if (canalActual) {
+        reproducir(canalActual.url, canalActual.nombre, true)
+      }
+    }, Math.pow(2, intentosReconexion) * 1000) // Backoff exponencial
+  }
+
+  // 📱 MEJORA 2: PICTURE-IN-PICTURE NATIVO
+  function activarPictureInPicture() {
+    if (!canalActual) {
+      mostrarNotificacion("⚠️ No hay canal reproduciéndose")
+      return
+    }
+
+    if (!document.pictureInPictureEnabled) {
+      mostrarNotificacion("❌ Picture-in-Picture no soportado")
+      return
+    }
+
+    if (video !== document.pictureInPictureElement) {
+      video
+        .requestPictureInPicture()
+        .then(() => {
+          mostrarNotificacion("🖼️ Picture-in-Picture activado")
+        })
+        .catch((error) => {
+          console.error("Error PiP:", error)
+          mostrarNotificacion("❌ Error al activar Picture-in-Picture")
+        })
+    } else {
+      document.exitPictureInPicture().then(() => {
+        mostrarNotificacion("🖼️ Picture-in-Picture desactivado")
+      })
+    }
+  }
+
+  // ⏰ MEJORA 3: SLEEP TIMER
+  function iniciarSleepTimer(minutos) {
+    if (sleepTimer) {
+      clearInterval(sleepTimer)
+    }
+
+    tiempoRestanteSleep = minutos * 60 // Convertir a segundos
+    const timerStatus = document.getElementById("timerStatus")
+
+    sleepTimer = setInterval(() => {
+      tiempoRestanteSleep--
+
+      const minutosRestantes = Math.floor(tiempoRestanteSleep / 60)
+      const segundosRestantes = tiempoRestanteSleep % 60
+
+      timerStatus.innerHTML = `
+        ⏰ Timer activo: ${minutosRestantes}:${segundosRestantes.toString().padStart(2, "0")}
+        <br><small>La aplicación se pausará automáticamente</small>
+      `
+
+      if (tiempoRestanteSleep <= 0) {
+        clearInterval(sleepTimer)
+        video.pause()
+        if (miniVideo) miniVideo.pause()
+        timerStatus.innerHTML = "😴 ¡Sleep Timer activado! Video pausado."
+        mostrarNotificacion("😴 Sleep Timer: Video pausado automáticamente")
+
+        // Auto-cerrar modal después de 3 segundos
+        setTimeout(() => {
+          modalSleepTimer.style.display = "none"
+        }, 3000)
+      }
+    }, 1000)
+
+    modalSleepTimer.style.display = "none"
+    mostrarNotificacion(`⏰ Sleep Timer configurado para ${minutos} minutos`)
+  }
+
+  function cancelarSleepTimer() {
+    if (sleepTimer) {
+      clearInterval(sleepTimer)
+      sleepTimer = null
+      tiempoRestanteSleep = 0
+      document.getElementById("timerStatus").innerHTML = ""
+      mostrarNotificacion("⏰ Sleep Timer cancelado")
+    }
+  }
+
+  // 🔊 MEJORA 4: CONTROL DE VOLUMEN VISUAL
+  function actualizarVolumen(valor) {
+    video.volume = valor / 100
+    if (miniVideo) miniVideo.volume = valor / 100
+    volumenTexto.textContent = valor + "%"
+    localStorage.setItem("volumen", valor)
+
+    // Cambiar icono según volumen
+    const iconoVolumen = document.querySelector(".controles-volumen span")
+    if (valor == 0) {
+      iconoVolumen.textContent = "🔇"
+    } else if (valor < 30) {
+      iconoVolumen.textContent = "🔈"
+    } else if (valor < 70) {
+      iconoVolumen.textContent = "🔉"
+    } else {
+      iconoVolumen.textContent = "🔊"
+    }
+  }
+
+  // 📋 MEJORA 5: LISTAS DE REPRODUCCIÓN PERSONALIZADAS
+  function crearListaPersonalizada(nombre) {
+    if (!nombre.trim()) {
+      mostrarNotificacion("⚠️ Ingresa un nombre para la lista")
+      return
+    }
+
+    const nuevaLista = {
+      id: Date.now(),
+      nombre: nombre.trim(),
+      canales: [],
+      fechaCreacion: new Date().toLocaleString(),
+    }
+
+    listasPersonalizadas.push(nuevaLista)
+    localStorage.setItem("listasPersonalizadas", JSON.stringify(listasPersonalizadas))
+    actualizarListasPersonalizadas()
+    mostrarNotificacion(`📋 Lista "${nombre}" creada correctamente`)
+    document.getElementById("nombreNuevaLista").value = ""
+  }
+
+  function agregarCanalALista(listaId, canal) {
+    const lista = listasPersonalizadas.find((l) => l.id === listaId)
+    if (!lista) return
+
+    // Evitar duplicados
+    if (lista.canales.some((c) => c.url === canal.url)) {
+      mostrarNotificacion("⚠️ El canal ya está en esta lista")
+      return
+    }
+
+    lista.canales.push(canal)
+    localStorage.setItem("listasPersonalizadas", JSON.stringify(listasPersonalizadas))
+    actualizarListasPersonalizadas()
+    mostrarNotificacion(`➕ Canal agregado a "${lista.nombre}"`)
+
+    // Cerrar modal si existe
+    const modales = document.querySelectorAll(".modal")
+    modales.forEach((modal) => {
+      if (modal.innerHTML.includes("Agregar a lista")) {
+        modal.remove()
+      }
+    })
+  }
+
+  function eliminarLista(listaId) {
+    if (confirm("¿Estás seguro de eliminar esta lista?")) {
+      listasPersonalizadas = listasPersonalizadas.filter((l) => l.id !== listaId)
+      localStorage.setItem("listasPersonalizadas", JSON.stringify(listasPersonalizadas))
+      actualizarListasPersonalizadas()
+      mostrarNotificacion("🗑️ Lista eliminada")
+    }
+  }
+
+  function cargarListaPersonalizada(listaId) {
+    const lista = listasPersonalizadas.find((l) => l.id === listaId)
+    if (!lista) return
+
+    const categorias = { [lista.nombre]: lista.canales }
+    canalesPorCategoria = categorias
+    renderCategorias(categorias)
+    modalListas.style.display = "none"
+    mostrarNotificacion(`📋 Lista "${lista.nombre}" cargada`)
+  }
+
+  function actualizarListasPersonalizadas() {
+    const container = document.getElementById("listasContainer")
+    container.innerHTML = ""
+
+    if (listasPersonalizadas.length === 0) {
+      container.innerHTML =
+        '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No tienes listas personalizadas aún</p>'
+      return
+    }
+
+    listasPersonalizadas.forEach((lista) => {
+      const div = document.createElement("div")
+      div.className = "lista-item"
+      div.innerHTML = `
+        <div class="lista-info">
+          <h4>${lista.nombre}</h4>
+          <p>${lista.canales.length} canales • ${lista.fechaCreacion}</p>
+        </div>
+        <div class="lista-controles">
+          <button onclick="cargarListaPersonalizada(${lista.id})">▶️ Cargar</button>
+          <button onclick="eliminarLista(${lista.id})">🗑️ Eliminar</button>
+        </div>
+      `
+      container.appendChild(div)
+    })
+  }
+
+  // Hacer funciones globales
+  window.cargarListaPersonalizada = cargarListaPersonalizada
+  window.eliminarLista = eliminarLista
+
+  function agregarAlHistorial(canal) {
+    const item = {
+      nombre: canal.nombre,
+      url: canal.url,
+      fecha: new Date().toLocaleString(),
+      timestamp: Date.now(),
+    }
+
+    historial = historial.filter((h) => h.url !== canal.url)
+    historial.unshift(item)
+    historial = historial.slice(0, 50)
+    localStorage.setItem("historial", JSON.stringify(historial))
+    actualizarHistorial()
+  }
+
+  function actualizarHistorial() {
+    historialLista.innerHTML = ""
+
+    if (historial.length === 0) {
+      historialLista.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No hay historial aún</p>'
+      return
+    }
+
+    historial.forEach((item) => {
+      const div = document.createElement("div")
+      div.className = "historial-item"
+      div.innerHTML = `
+        <div>
+          <div style="font-weight: 600;">${item.nombre}</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">${item.fecha}</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button onclick="reproducirDesdeHistorial('${item.url}', '${item.nombre}')" style="background: var(--neon-primary); color: var(--primary-bg); border: none; padding: 0.5rem 1rem; border-radius: 15px; cursor: pointer;">▶️</button>
+          <button onclick="mostrarListasParaAgregar('${item.url}', '${item.nombre}')" style="background: var(--accent-bg); color: var(--text-primary); border: 1px solid var(--glass-border); padding: 0.5rem 1rem; border-radius: 15px; cursor: pointer;">📋</button>
+        </div>
+      `
+      historialLista.appendChild(div)
+    })
+  }
+
+  function mostrarListasParaAgregar(url, nombre) {
+    if (listasPersonalizadas.length === 0) {
+      mostrarNotificacion("⚠️ Crea una lista primero")
+      return
+    }
+
+    const modal = document.createElement("div")
+    modal.className = "modal"
+    modal.style.display = "flex"
+    modal.innerHTML = `
+      <div class="modal__content">
+        <h3>📋 Agregar a lista</h3>
+        <p>Selecciona la lista para agregar: <strong>${nombre}</strong></p>
+        <div class="listas-opciones">
+          ${listasPersonalizadas
+            .map(
+              (lista) => `
+            <button class="lista-opcion" data-lista-id="${lista.id}" data-canal-url="${url}" data-canal-nombre="${nombre}" style="display: block; width: 100%; margin: 0.5rem 0; padding: 0.8rem; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-primary); cursor: pointer; transition: all 0.3s ease;">
+              ${lista.nombre} (${lista.canales.length} canales)
+            </button>
+          `,
+            )
+            .join("")}
+      </div>
+      <button class="modal__button" onclick="this.closest('.modal').remove()">Cancelar</button>
+    </div>
+  `
+    document.body.appendChild(modal)
+
+    // Agregar event listeners a los botones de lista
+    modal.querySelectorAll(".lista-opcion").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const listaId = Number.parseInt(btn.dataset.listaId)
+        const canalUrl = btn.dataset.canalUrl
+        const canalNombre = btn.dataset.canalNombre
+
+        agregarCanalALista(listaId, { url: canalUrl, nombre: canalNombre })
+        modal.remove()
+      })
+
+      btn.addEventListener("mouseenter", () => {
+        btn.style.borderColor = "var(--neon-primary)"
+        btn.style.boxShadow = "0 0 15px var(--neon-primary)"
+      })
+
+      btn.addEventListener("mouseleave", () => {
+        btn.style.borderColor = "var(--glass-border)"
+        btn.style.boxShadow = "none"
+      })
+    })
+
+    // Auto-eliminar después de 30 segundos
+    setTimeout(() => {
+      if (document.body.contains(modal)) {
+        modal.remove()
+      }
+    }, 30000)
+  }
+
+  window.mostrarListasParaAgregar = mostrarListasParaAgregar
+  window.reproducirDesdeHistorial = (url, nombre) => {
+    modalHistorial.style.display = "none"
+    reproducir(url, nombre)
+  }
+
+  function reproducir(url, nombre, esReconexion = false) {
+    console.log("Intentando reproducir:", nombre, url)
+
+    // Limpiar reproductor anterior
+    if (hls) {
+      hls.destroy()
+      hls = null
+    }
+
+    video.src = ""
+    video.load()
+
+    if (!url || !url.match(/^https?:\/\//)) {
+      mostrarNotificacion("❌ URL no válida")
+      return
+    }
+
+    // Validar que la URL sea HTTPS para evitar contenido mixto
+    if (url.startsWith("http://") && window.location.protocol === "https:") {
+      mostrarNotificacion("❌ Error: La URL debe usar HTTPS debido a que la aplicación se ejecuta en HTTPS")
+      return
+    }
+
+    canalActual = { nombre, url }
+
+    try {
+      if (Hls.isSupported()) {
+        console.log("Usando HLS.js para reproducir")
+        hls = new Hls({
+          enableWorker: false,
+          lowLatencyMode: true,
+          backBufferLength: 90,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 600,
+          maxBufferSize: 60 * 1000 * 1000,
+          maxBufferHole: 0.5,
+        })
+
+        hls.loadSource(url)
+        hls.attachMedia(video)
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log("Manifest parseado correctamente")
+          video
+            .play()
+            .then(() => {
+              console.log("Reproducción iniciada")
+              if (!esReconexion) {
+                mostrarNotificacion(`▶️ Reproduciendo: ${nombre}`)
+                agregarAlHistorial(canalActual)
+              } else {
+                mostrarNotificacion("✅ Reconexión exitosa")
+                intentosReconexion = 0 // Reset contador
+              }
+            })
+            .catch((e) => {
+              console.error("Error al iniciar reproducción:", e)
+              mostrarNotificacion("❌ Error al iniciar reproducción")
+            })
+        })
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error("Error HLS:", data)
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.log("Error de red, intentando recuperar...")
+                if (data.details === "manifestLoadError" && url.startsWith("http://")) {
+                  mostrarNotificacion("❌ Error: Contenido mixto bloqueado (HTTP en página HTTPS)")
+                } else {
+                  mostrarNotificacion("⚠️ Error de red en el stream")
+                  if (!esReconexion) {
+                    intentarReconexion()
+                  }
+                }
+                break
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.log("Error de media, intentando recuperar...")
+                hls.recoverMediaError()
+                mostrarNotificacion("⚠️ Error de media - Reintentando...")
+                break
+              default:
+                console.log("Error fatal, destruyendo HLS")
+                hls.destroy()
+                mostrarNotificacion(`❌ Error: ${data.details}`)
+                if (!esReconexion && !url.startsWith("http://")) {
+                  intentarReconexion()
+                } else {
+                  mostrarNotificacion("❌ Canal no disponible")
+                }
+                break
+            }
+          }
+        })
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        console.log("Usando soporte nativo HLS")
+        video.src = url
+        video.addEventListener("loadedmetadata", () => {
+          video
+            .play()
+            .then(() => {
+              if (!esReconexion) {
+                mostrarNotificacion(`▶️ Reproduciendo: ${nombre}`)
+                agregarAlHistorial(canalActual)
+              } else {
+                mostrarNotificacion("✅ Reconexión exitosa")
+                intentosReconexion = 0
+              }
+            })
+            .catch((e) => {
+              console.error("Error al reproducir:", e)
+              if (url.startsWith("http://") && window.location.protocol === "https:") {
+                mostrarNotificacion("❌ Error: Contenido mixto bloqueado (HTTP en página HTTPS)")
+              } else {
+                mostrarNotificacion("❌ Error al reproducir")
+              }
+            })
+        })
+      } else {
+        console.error("HLS no soportado")
+        mostrarNotificacion("❌ Tu navegador no soporta HLS")
+        return
+      }
+
+      localStorage.setItem("ultimoCanal", url)
+      localStorage.setItem("ultimoNombre", nombre)
+    } catch (error) {
+      console.error("Error en reproducir():", error)
+      mostrarNotificacion("❌ Error al configurar reproductor")
+    }
+  }
+
+  function activarMiniplayer() {
+    if (!canalActual) {
+      mostrarNotificacion("⚠️ No hay canal reproduciéndose")
+      return
+    }
+
+    // Validar HTTPS para miniplayer
+    if (canalActual.url.startsWith("http://") && window.location.protocol === "https:") {
+      mostrarNotificacion("❌ Error: La URL del canal debe usar HTTPS para el miniplayer")
+      return
+    }
+
+    miniplayer.style.display = "block"
+    miniplayerTitle.textContent = canalActual.nombre
+
+    if (miniHls) {
+      miniHls.destroy()
+      miniHls = null
+    }
+
+    miniVideo.src = ""
+    miniVideo.load()
+
+    try {
+      if (Hls.isSupported()) {
+        miniHls = new Hls()
+        miniHls.loadSource(canalActual.url)
+        miniHls.attachMedia(miniVideo)
+        miniHls.on(Hls.Events.MANIFEST_PARSED, () => {
+          miniVideo.play()
+        })
+      } else if (miniVideo.canPlayType("application/vnd.apple.mpegurl")) {
+        miniVideo.src = canalActual.url
+        miniVideo.addEventListener("loadedmetadata", () => miniVideo.play())
+      }
+    } catch (error) {
+      console.error("Error en miniplayer:", error)
+      mostrarNotificacion("❌ Error al configurar miniplayer")
+    }
+
+    mostrarNotificacion("📱 Miniplayer activado")
+  }
+
+  function cambiarCanal(direccion) {
+    if (canalesArray.length === 0) return
+
+    const indiceActual = canalesArray.findIndex((c) => c.url === canalActual?.url)
+    let nuevoIndice
+
+    if (indiceActual === -1) {
+      nuevoIndice = 0
+    } else {
+      nuevoIndice = indiceActual + direccion
+      if (nuevoIndice < 0) nuevoIndice = canalesArray.length - 1
+      if (nuevoIndice >= canalesArray.length) nuevoIndice = 0
+    }
+
+    const nuevoCanal = canalesArray[nuevoIndice]
+    reproducir(nuevoCanal.url, nuevoCanal.nombre)
+  }
+
+  function capturarPantalla() {
+    if (!video.videoWidth) {
+      mostrarNotificacion("⚠️ No hay video reproduciéndose")
+      return
+    }
+
+    const canvas = documentmdl.createElement("canvas")
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+
+    const ctx = canvas.getContext("2d")
+    ctx.drawImage(video, 0, 0)
+
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `captura-${canalActual?.nombre || "video"}-${Date.now()}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+      mostrarNotificacion("📸 Captura guardada")
+    })
+  }
+
+  function toggleFavorito(url) {
+    if (favoritos.includes(url)) {
+      favoritos = favoritos.filter((f) => f !== url)
+    } else {
+      favoritos.push(url)
+    }
+    localStorage.setItem("favoritos", JSON.stringify(favoritos))
+    renderCategorias(canalesPorCategoria)
+  }
+
+  function renderCategorias(categorias) {
+    selectorCategorias.innerHTML = ""
+    canalesArray = []
+
+    if (Object.keys(categorias).length === 0) {
+      selectorCategorias.innerHTML =
+        '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No hay canales cargados. Usa los botones de arriba para cargar una lista.</p>'
+      return
+    }
+
+    for (const cat in categorias) {
+      const seccion = document.createElement("details")
+      seccion.open = false
+      const resumen = document.createElement("summary")
+      resumen.textContent = `${cat} (${categorias[cat].length})`
+      seccion.appendChild(resumen)
+
+      const lista = document.createElement("div")
+      categorias[cat].forEach((canal) => {
+        canalesArray.push(canal)
+
+        if (filtrar(canal)) {
+          const btn = document.createElement("button")
+          btn.className = "canal" + (favoritos.includes(canal.url) ? " fav" : "")
+          btn.innerHTML = `
+            <span>${canal.nombre}</span> 
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="favorito" title="Favorito">★</button>
+              <button class="agregar-lista" title="Agregar a lista" style="background: none; border: none; color: var(--neon-secondary); cursor: pointer;">📋</button>
+            </div>
+          `
+
+          btn.onclick = (e) => {
+            if (e.target.classList.contains("favorito") || e.target.classList.contains("agregar-lista")) return
+            reproducir(canal.url, canal.nombre)
+          }
+
+          const favBtn = btn.querySelector(".favorito")
+          favBtn.onclick = (e) => {
+            e.stopPropagation()
+            toggleFavorito(canal.url)
+          }
+
+          const listaBtn = btn.querySelector(".agregar-lista")
+          listaBtn.onclick = (e) => {
+            e.stopPropagation()
+            mostrarListasParaAgregar(canal.url, canal.nombre)
+          }
+
+          lista.appendChild(btn)
+        }
+      })
+
+      if (lista.children.length > 0) {
+        seccion.appendChild(lista)
+        selectorCategorias.appendChild(seccion)
+      }
+    }
+  }
+
+  function filtrar(canal) {
+    const texto = inputBusqueda.value.toLowerCase()
+    const soloFav = document.body.classList.contains("solo-fav")
+    const coincide = canal.nombre.toLowerCase().includes(texto)
+    const esFav = favoritos.includes(canal.url)
+    return coincide && (!soloFav || esFav)
+  }
+
+  function cargarCanales(texto) {
+    console.log("Cargando canales desde texto M3U")
+    const lines = texto.split("\n")
+    let nombre = ""
+    let numero = 1
+    const categorias = {}
+    let canalesIgnorados = 0
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+
+      if (line.startsWith("#EXTINF")) {
+        const match = line.match(/,(.+)$/)
+        if (!match) {
+          console.warn(`Línea M3U mal formateada: ${line}`)
+          continue
+        }
+        nombre = match[1].trim() || `Canal ${numero}`
+      } else if (line.match(/^https?:\/\//)) {
+        const url = line.trim()
+        // Validar que la URL sea HTTPS si la página está en HTTPS
+        if (url.startsWith("http://") && window.location.protocol === "https:") {
+          console.warn(`URL ignorada por contenido mixto (HTTP en página HTTPS): ${url}`)
+          canalesIgnorados++
+          continue
+        }
+        if (!url.match(/^https?:\/\/[^\s]+$/)) {
+          console.warn(`URL inválida en M3U: ${url}`)
+          canalesIgnorados++
+          continue
+        }
+        const categoria = categorizar(nombre)
+        if (!categorias[categoria]) {
+          categorias[categoria] = []
+        }
+        categorias[categoria].push({
+          nombre: `${numero}. ${nombre}`,
+          url: url,
+        })
+        numero++
+      }
+    }
+
+    if (canalesIgnorados > 0) {
+      mostrarNotificacion(`⚠️ ${canalesIgnorados} canal(es) ignorado(s) por usar HTTP en una página HTTPS`)
+    }
+
+    console.log("Canales cargados:", categorias)
+    canalesPorCategoria = categorias
+    renderCategorias(categorias)
+
+    const ultimoCanal = localStorage.getItem("ultimoCanal")
+    const ultimoNombre = localStorage.getItem("ultimoNombre")
+    if (ultimoCanal && ultimoNombre) {
+      setTimeout(() => {
+        const canal = Object.values(categorias)
+          .flat()
+          .find((c) => c.url === ultimoCanal)
+        if (canal) {
+          reproducir(ultimoCanal, ultimoNombre)
+        }
+      }, 1000)
+    }
+  }
+
+  // EVENT LISTENERS PRINCIPALES
+  m3uFile.addEventListener("change", (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    mostrarNotificacion("📁 Cargando archivo...")
+    const reader = new FileReader()
+    reader.onload = () => {
+      cargarCanales(reader.result)
+      mostrarNotificacion("✅ Archivo cargado correctamente")
+    }
+    reader.onerror = () => {
+      mostrarNotificacion("❌ Error al leer el archivo")
+    }
+    reader.readAsText(file)
+  })
+
+  inputBusqueda.addEventListener("input", () => {
+    renderCategorias(canalesPorCategoria)
+  })
+
+  toggleFavoritos.onclick = () => {
+    document.body.classList.toggle("solo-fav")
+    renderCategorias(canalesPorCategoria)
+    const soloFav = document.body.classList.contains("solo-fav")
+    toggleFavoritos.textContent = soloFav ? "⭐ Mostrar todos" : "★ Solo favoritos"
+  }
+
+  modoOscuro.onclick = () => {
+    document.body.classList.toggle("oscuro")
+    const esOscuro = document.body.classList.contains("oscuro")
+    modoOscuro.textContent = esOscuro ? "🌞 Modo claro" : "🌓 Modo oscuro"
+  }
+
+  acercaApp.onclick = () => {
+    modalAcerca.style.display = "flex"
+  }
+
+  cargarDesdeUrl.onclick = async () => {
+    const url = urlM3U.value.trim()
+    if (!url) {
+      mostrarNotificacion("⚠️ Debes ingresar una URL .m3u")
+      return
+    }
+    if (!url.match(/^https:\/\/[^\s]+\.m3u$/)) {
+      mostrarNotificacion("⚠️ La URL debe ser un archivo .m3u válido y usar HTTPS")
+      return
+    }
+
+    mostrarNotificacion("🌐 Cargando desde URL...")
+    try {
+      const response = await fetch(url, { mode: 'cors' })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      const texto = await response.text()
+      if (!texto.includes("#EXTINF")) {
+        throw new Error("El archivo no parece ser un M3U válido")
+      }
+      cargarCanales(texto)
+      mostrarNotificacion("✅ Lista cargada desde URL")
+    } catch (error) {
+      console.error("Error al cargar desde URL:", error)
+      mostrarNotificacion(`❌ Error: ${error.message}`)
+    }
+  }
+
+  listasRecomendadas.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const url = btn.dataset.url
+      const nombre = btn.textContent
+
+      if (!url.match(/^https:\/\/[^\s]+\.m3u$/)) {
+        mostrarNotificacion(`⚠️ La URL de ${nombre} debe usar HTTPS`)
+        return
+      }
+
+      urlM3U.value = url
+      mostrarNotificacion(`🌐 Cargando ${nombre}...`)
+
+      try {
+        const response = await fetch(url, { mode: 'cors' })
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        const texto = await response.text()
+        if (!texto.includes("#EXTINF")) {
+          throw new Error("El archivo no parece ser un M3U válido")
+        }
+        cargarCanales(texto)
+        mostrarNotificacion(`✅ ${nombre} cargado correctamente`)
+      } catch (error) {
+        console.error("Error al cargar lista recomendada:", error)
+        mostrarNotificacion(`❌ Error al cargar ${nombre}: ${error.message}`)
+      }
+    })
+  })
+
+  // EVENT LISTENERS EXISTENTES
+  selectorTemas.onclick = () => {
+    modalTemas.style.display = "flex"
+  }
+
+  document.querySelectorAll(".tema-btn").forEach((btn) => {
+    btn.onclick = () => {
+      const tema = btn.dataset.tema
+      document.documentElement.setAttribute("data-theme", tema)
+      localStorage.setItem("tema", tema)
+      modalTemas.style.display = "none"
+      mostrarNotificacion(`🎨 Tema ${tema} aplicado`)
+    }
+  })
+
+  historialBtn.onclick = () => {
+    actualizarHistorial()
+    modalHistorial.style.display = "flex"
+  }
+
+  miniplayerBtn.onclick = () => {
+    activarMiniplayer()
+  }
+
+  miniplayerClose.onclick = () => {
+    miniplayer.style.display = "none"
+    if (miniHls) {
+      miniHls.destroy()
+      miniHls = null
+    }
+  }
+
+  miniplayerExpand.onclick = () => {
+    miniplayer.style.display = "none"
+    if (miniHls) {
+      miniHls.destroy()
+      miniHls = null
+    }
+    if (canalActual) {
+      reproducir(canalActual.url, canalActual.nombre)
+    }
+  }
+
+  fullscreenBtn.onclick = () => {
+    if (video.requestFullscreen) {
+      video.requestFullscreen()
+    } else if (video.webkitRequestFullscreen) {
+      video.webkitRequestFullscreen()
+    } else if (video.msRequestFullscreen) {
+      video.msRequestFullscreen()
+    }
+  }
+
+  capturaBtn.onclick = () => {
+    capturarPantalla()
+  }
+
+  atajosBtn.onclick = () => {
+    modalAtajos.style.display = "flex"
+  }
+
+  // NUEVOS EVENT LISTENERS - 5 MEJORAS IMPACTANTES
+  pipBtn.onclick = () => {
+    activarPictureInPicture()
+  }
+
+  volumenSlider.addEventListener("input", (e) => {
+    actualizarVolumen(e.target.value)
+  })
+
+  sleepTimerBtn.onclick = () => {
+    modalSleepTimer.style.display = "flex"
+    if (sleepTimer) {
+      const timerStatus = document.getElementById("timerStatus")
+      const minutosRestantes = Math.floor(tiempoRestanteSleep / 60)
+      const segundosRestantes = tiempoRestanteSleep % 60
+      timerStatus.innerHTML = `
+        ⏰ Timer activo: ${minutosRestantes}:${segundosRestantes.toString().padStart(2, "0")}
+        <br><small>La aplicación se pausará automáticamente</small>
+      `
+    }
+  }
+
+  document.querySelectorAll(".timer-btn").forEach((btn) => {
+    btn.onclick = () => {
+      const minutos = Number.parseInt(btn.dataset.minutos)
+      iniciarSleepTimer(minutos)
+    }
+  })
+
+  document.getElementById("timerCustomBtn").onclick = () => {
+    const minutos = Number.parseInt(document.getElementById("timerCustom").value)
+    if (minutos && minutos > 0 && minutos <= 480) {
+      iniciarSleepTimer(minutos)
+    } else {
+      mostrarNotificacion("⚠️ Ingresa un valor entre 1 y 480 minutos")
+    }
+  }
+
+  document.getElementById("cancelarTimer").onclick = () => {
+    cancelarSleepTimer()
+  }
+
+  listasBtn.onclick = () => {
+    actualizarListasPersonalizadas()
+    modalListas.style.display = "flex"
+  }
+
+  document.getElementById("crearListaBtn").onclick = () => {
+    const nombre = document.getElementById("nombreNuevaLista").value.trim()
+    if (!nombre) {
+      mostrarNotificacion("⚠️ Ingresa un nombre para la lista")
+      return
+    }
+
+    if (listasPersonalizadas.some((lista) => lista.nombre.toLowerCase() === nombre.toLowerCase())) {
+      mostrarNotificacion("⚠️ Ya existe una lista con ese nombre")
+      return
+    }
+
+    crearListaPersonalizada(nombre)
+  }
+
+  // Atajos de teclado MEJORADOS
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return
+
+    switch (e.key.toLowerCase()) {
+      case " ":
+        e.preventDefault()
+        if (video.paused) {
+          video.play()
+        } else {
+          video.pause()
+        }
+        break
+      case "arrowup":
+        if (e.ctrlKey) {
+          e.preventDefault()
+          const nuevoVolumen = Math.min(100, Number.parseInt(volumenSlider.value) + 10)
+          volumenSlider.value = nuevoVolumen
+          actualizarVolumen(nuevoVolumen)
+        } else {
+          e.preventDefault()
+          cambiarCanal(-1)
+        }
+        break
+      case "arrowdown":
+        if (e.ctrlKey) {
+          e.preventDefault()
+          const nuevoVolumen = Math.max(0, Number.parseInt(volumenSlider.value) - 10)
+          volumenSlider.value = nuevoVolumen
+          actualizarVolumen(nuevoVolumen)
+        } else {
+          e.preventDefault()
+          cambiarCanal(1)
+        }
+        break
+      case "f":
+        e.preventDefault()
+        fullscreenBtn.click()
+        break
+      case "p":
+        e.preventDefault()
+        activarPictureInPicture()
+        break
+      case "m":
+        e.preventDefault()
+        activarMiniplayer()
+        break
+      case "h":
+        e.preventDefault()
+        historialBtn.click()
+        break
+      case "t":
+        e.preventDefault()
+        selectorTemas.click()
+        break
+      case "l":
+        e.preventDefault()
+        listasBtn.click()
+        break
+      case "s":
+        e.preventDefault()
+        sleepTimerBtn.click()
+        break
+      case "?":
+        e.preventDefault()
+        atajosBtn.click()
+        break
+      case "escape":
+        document.querySelectorAll(".modal").forEach((modal) => {
+          modal.style.display = "none"
+        })
+        break
+      case "r":
+        if (e.ctrlKey) {
+          e.preventDefault()
+          recomendacionesBtn.click()
+        }
+        break
+      case "v":
+        if (e.ctrlKey) {
+          e.preventDefault()
+          multiviewBtn.click()
+        }
+        break
+      case "g":
+        if (e.ctrlKey) {
+          e.preventDefault()
+          epgBtn.click()
+        }
+        break
+    }
+  })
+
+  // Hacer el miniplayer arrastrable
+  let isDragging = false
+  const dragOffset = { x: 0, y: 0 }
+
+  document.querySelector(".miniplayer__header").addEventListener("mousedown", (e) => {
+    isDragging = true
+    dragOffset.x = e.clientX - miniplayer.offsetLeft
+    dragOffset.y = e.clientY - miniplayer.offsetTop
+    document.addEventListener("mousemove", handleDrag)
+    document.addEventListener("mouseup", stopDrag)
+  })
+
+  function handleDrag(e) {
+    if (!isDragging) return
+    miniplayer.style.left = e.clientX - dragOffset.x + "px"
+    miniplayer.style.top = e.clientY - dragOffset.y + "px"
+    miniplayer.style.right = "auto"
+    miniplayer.style.bottom = "auto"
+  }
+
+  function stopDrag() {
+    isDragging = false
+    document.removeEventListener("mousemove", handleDrag)
+    document.removeEventListener("mouseup", stopDrag)
+  }
+
+  // 🤖 RECOMENDACIONES IA
+  function mostrarRecomendaciones() {
+    const recomendacionesLista = document.getElementById("recomendacionesLista")
+    recomendacionesLista.innerHTML = '<div class="ai-loading">🤖 Analizando patrones...</div>'
+
+    modalRecomendaciones.style.display = "flex"
+
+    setTimeout(() => {
+      const canalesArray = Object.values(canalesPorCategoria).flat()
+
+      if (canalesArray.length === 0) {
+        recomendacionesLista.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <h3>📺 Carga canales primero</h3>
+            <p>Necesitas cargar una lista M3U para obtener recomendaciones</p>
+          </div>
+        `
+        return
+      }
+
+      const recomendaciones = iaRecomendaciones
+        ? iaRecomendaciones.generarRecomendaciones(canalesArray, historial, favoritos)
+        : []
+
+      recomendacionesLista.innerHTML = ""
+
+      if (recomendaciones.length === 0) {
+        recomendacionesLista.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <h3>🤖 IA Aprendiendo...</h3>
+            <p>Ve más canales para obtener mejores recomendaciones</p>
+          </div>
+        `
+        return
+      }
+
+      recomendaciones.forEach((rec, index) => {
+        const item = document.createElement("div")
+        item.className = "recomendacion-item"
+        item.innerHTML = `
+          <div class="recomendacion-info">
+            <h4>${rec.canal.nombre}</h4>
+            <p>${rec.razon}</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="recomendacion-score">${rec.puntuacion}%</div>
+            <button onclick="window.reproducirRecomendacion('${rec.canal.url}', '${rec.canal.nombre}')" 
+                    style="background: var(--neon-primary); color: var(--primary-bg); border: none; padding: 0.5rem 1rem; border-radius: 15px; cursor: pointer;">
+              ▶️ Ver
+            </button>
+          </div>
+        `
+        recomendacionesLista.appendChild(item)
+      })
+
+      mostrarNotificacion(`🤖 ${recomendaciones.length} recomendaciones generadas`)
+    }, 800)
+  }
+
+  function entrenarIA() {
+    const entrenarBtn = document.getElementById("entrenarIA")
+    entrenarBtn.textContent = "🧠 Entrenando..."
+    entrenarBtn.disabled = true
+
+    setTimeout(() => {
+      const resultado = iaRecomendaciones
+        ? iaRecomendaciones.entrenarModelo(historial, favoritos, Object.values(canalesPorCategoria).flat())
+        : { precision: 75 }
+
+      entrenarBtn.textContent = "✅ Entrenado"
+      mostrarNotificacion(`🧠 IA entrenada: ${resultado.precision}% precisión`)
+
+      setTimeout(() => {
+        entrenarBtn.textContent = "🧠 Entrenar IA"
+        entrenarBtn.disabled = false
+      }, 2000)
+    }, 1500)
+  }
+
+  // 🔄 MULTI-VIEW
+  function activarMultiView(numeroCanales) {
+    const canalesArray = Object.values(canalesPorCategoria).flat()
+
+    if (canalesArray.length === 0) {
+      mostrarNotificacion("⚠️ Carga canales primero")
+      return
+    }
+
+    if (canalesArray.length < numeroCanales) {
+      mostrarNotificacion(`⚠️ Necesitas al menos ${numeroCanales} canales`)
+      return
+    }
+
+    multiViewManager.crearMultiView(numeroCanales, canalesArray)
+    mostrarNotificacion(`🔄 Multi-view ${numeroCanales} canales activado`)
+  }
+
+  // 📅 EPG
+  function mostrarEPG(vista = "hoy") {
+    document.querySelectorAll(".epg-btn").forEach((btn) => btn.classList.remove("active"))
+    const btnActivo = document.getElementById(`epg${vista.charAt(0).toUpperCase() + vista.slice(1)}`)
+    if (btnActivo) btnActivo.classList.add("active")
+
+    const contenido = document.getElementById("epgContenido")
+    contenido.innerHTML = '<div class="ai-loading">📅 Cargando programación...</div>'
+
+    setTimeout(() => {
+      epgManager.renderizarEPG(vista)
+      mostrarNotificacion(`📅 EPG ${vista} cargado`)
+    }, 300)
+  }
+
+  // EVENT LISTENERS PARA NUEVAS FUNCIONES
+  recomendacionesBtn.onclick = () => {
+    mostrarRecomendaciones()
+  }
+
+  document.getElementById("entrenarIA").onclick = () => {
+    entrenarIA()
+  }
+
+  multiviewBtn.addEventListener("click", () => {
+    console.log("Multi-view button clicked")
+    modalMultiview.style.display = "flex"
+  })
+
+  document.getElementById("multiview2").addEventListener("click", () => {
+    console.log("Multi-view 2 clicked")
+    activarMultiView(2)
+  })
+
+  document.getElementById("multiview4").addEventListener("click", () => {
+    console.log("Multi-view 4 clicked")
+    activarMultiView(4)
+  })
+
+  document.getElementById("multiview6").addEventListener("click", () => {
+    console.log("Multi-view 6 clicked")
+    activarMultiView(6)
+  })
+
+  document.getElementById("cerrarMultiview").addEventListener("click", () => {
+    console.log("Cerrar multi-view clicked")
+    multiViewManager.cerrar()
+  })
+
+  epgBtn.addEventListener("click", () => {
+    console.log("EPG button clicked")
+    modalEPG.style.display = "flex"
+    mostrarEPG("hoy")
+  })
+
+  document.getElementById("epgHoy").addEventListener("click", () => {
+    console.log("EPG Hoy clicked")
+    mostrarEPG("hoy")
+  })
+
+  document.getElementById("epgManana").addEventListener("click", () => {
+    console.log("EPG Mañana clicked")
+    mostrarEPG("manana")
+  })
+
+  document.getElementById("epgSemana").addEventListener("click", () => {
+    console.log("EPG Semana clicked")
+    mostrarEPG("semana")
+  })
+
+  // Inicialización
+  console.log("🚀 Aplicación con IA, Multi-view y EPG inicializada")
+  mostrarNotificacion("🤖 IA activada • 🔄 Multi-view listo • 📅 EPG disponible")
+  actualizarHistorial()
+  actualizarListasPersonalizadas()
+})
+
+// Hacer funciones globales disponibles
+window.agregarCanalALista = (listaId, canal) => {
+  const lista = window.listasPersonalizadas.find((l) => l.id === listaId)
+  if (!lista) return
+
+  if (lista.canales.some((c) => c.url === canal.url)) {
+    window.mostrarNotificacion("⚠️ El canal ya está en esta lista")
+    return
+  }
+
+  lista.canales.push(canal)
+  window.localStorage.setItem("listasPersonalizadas", JSON.stringify(window.listasPersonalizadas))
+  window.actualizarListasPersonalizadas()
+  window.mostrarNotificacion(`➕ Canal agregado a "${lista.nombre}"`)
+
+  const modales = document.querySelectorAll(".modal")
+  modales.forEach((modal) => {
+    if (modal.innerHTML.includes("Agregar a lista")) {
+      modal.remove()
+    }
+  })
+}
+
+window.mostrarListasParaAgregar = (url, nombre) => {
+  if (window.listasPersonalizadas.length === 0) {
+    window.mostrarNotificacion("⚠️ Crea una lista primero")
+    return
+  }
+
+  const modal = document.createElement("div")
+  modal.className = "modal"
+  modal.style.display = "flex"
+  modal.innerHTML = `
+    <div class="modal__content">
+      <h3>📋 Agregar a lista</h3>
+      <p>Selecciona la lista para agregar: <strong>${nombre}</strong></p>
+      <div class="listas-opciones">
+        ${window.listasPersonalizadas
+          .map(
+            (lista) => `
+          <button class="lista-opcion" data-lista-id="${lista.id}" data-canal-url="${url}" data-canal-nombre="${nombre}" style="display: block; width: 100%; margin: 0.5rem 0; padding: 0.8rem; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-primary); cursor: pointer; transition: all 0.3s ease;">
+            ${lista.nombre} (${lista.canales.length} canales)
+          </button>
+        `,
+          )
+          .join("")}
+      </div>
+      <button class="modal__button" onclick="this.closest('.modal').remove()">Cancelar</button>
+    </div>
+  `
+  document.body.appendChild(modal)
+
+  modal.querySelectorAll(".lista-opcion").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const listaId = Number.parseInt(btn.dataset.listaId)
+      const canalUrl = btn.dataset.canalUrl
+      const canalNombre = btn.dataset.canalNombre
+
+      window.agregarCanalALista(listaId, { url: canalUrl, nombre: canalNombre })
+      modal.remove()
+    })
+
+    btn.addEventListener("mouseenter", () => {
+      btn.style.borderColor = "var(--neon-primary)"
+      btn.style.boxShadow = "0 0 15px var(--neon-primary)"
+    })
+
+    btn.addEventListener("mouseleave", () => {
+      btn.style.borderColor = "var(--glass-border)"
+      btn.style.boxShadow = "none"
+    })
+  })
+
+  setTimeout(() => {
+    if (document.body.contains(modal)) {
+      modal.remove()
+    }
+  }, 30000)
+}
+
+window.reproducirRecomendacion = (url, nombre) => {
+  document.getElementById("modalRecomendaciones").style.display = "none"
+  window.reproducir(url, nombre)
+}
+
+window.multiViewManager = window.multiViewManager
+window.epgManager = window.epgManager

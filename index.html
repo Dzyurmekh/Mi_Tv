@@ -1,0 +1,231 @@
+<!--
+Creado por Dzyurmekh – GitHub: https://github.com/Dzyurmekh
+Esta página es original. Prohibido su uso comercial sin permiso del autor.
+Año de creación: 2025
+-->
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TV Sin Fin | Canales en vivo gratis de España, Magreb y más</title>
+<link href="css/style.css" rel="stylesheet"/>
+<link href="manifest.json" rel="manifest"/>
+<meta content="#00d4ff" name="theme-color"/>
+<link href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;text y='.9em' font-size='90'&gt;📺&lt;/text&gt;&lt;/svg&gt;" rel="icon" sizes="192x192" type="image/png"/>
+<meta content="Disfruta de TV Sin Fin, tu plataforma para ver canales online gratuitos de España, Magreb, MENA y más. Accede sin cortes, sin registros y sin límites." name="description"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="MiTVPersonal" property="og:title"/><meta content="Tu TV online personalizada con canales exclusivos y contenido bajo demanda." property="og:description"/><meta content="website" property="og:type"/><meta content="https://mitvpersonal.netlify.app" property="og:url"/><meta content="https://mitvpersonal.netlify.app/logo.png" property="og:image"/></head>
+<body>
+<header class="header">
+<h1 class="header__title">Mi TV Personal Interactiva</h1>
+<div class="header__top-controls top-controls">
+<div class="top-controls__panel-carga panel-carga">
+<input accept=".m3u" class="panel-carga__input" id="m3uFile" type="file"/>
+<input class="panel-carga__input" id="urlM3U" placeholder="🌐 Pega URL .m3u aquí" type="text"/>
+<button class="panel-carga__button" id="cargarDesdeUrl">📡 Cargar desde URL</button>
+</div>
+<div class="top-controls__listas-recomendadas listas-recomendadas">
+<span class="listas-recomendadas__title">​▶️​ Listas recomendadas:</span>
+<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/countries/es.m3u">🇪🇸 España</button>
+<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/categories/news.m3u">🗞️ Noticias</button>
+<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/countries/ma.m3u">​🕋​ maghreb</button>
+<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/index.m3u">🌍 Global</button>
+<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/categories/sports.m3u">🏆​ Sport</button>
+</div>
+<div class="top-controls__acciones-utiles acciones-utiles">
+<input class="acciones-utiles__input" id="busqueda" placeholder="🔍 Buscar canal..." type="text"/>
+<button class="acciones-utiles__button" id="toggleFavoritos">★ Solo favoritos</button>
+<button class="acciones-utiles__button" id="modoOscuro">🌓 Modo oscuro</button>
+<button class="acciones-utiles__button" id="selectorTemas">🎨 Temas</button>
+<button class="acciones-utiles__button" id="historialBtn">📺 Historial</button>
+<button class="acciones-utiles__button" id="acercaApp">📄 Acerca de esta app</button>
+<button class="acciones-utiles__button" id="listasBtn">📋 Mis Listas</button>
+<button class="acciones-utiles__button" id="recomendacionesBtn">🤖 IA Recomienda</button>
+<button class="acciones-utiles__button" id="multiviewBtn">🔄 Multi-view</button>
+<button class="acciones-utiles__button" id="epgBtn">📅 Guía EPG</button>
+</div>
+</div>
+</header>
+<main class="main contenido">
+<aside class="main__menu-lateral menu-lateral" id="menuCategorias">
+<!-- Categorías desplegables se insertan aquí -->
+</aside>
+<section class="main__player-area player-area">
+<video autoplay="" class="player-area__video" controls="" id="player"></video>
+<div class="player-area__notificacion notificacion" id="notificacion"></div>
+<div class="controles-extra">
+<button class="control-btn" id="miniplayerBtn">📱 Miniplayer</button>
+<button class="control-btn" id="pipBtn">🖼️ Picture-in-Picture</button>
+<button class="control-btn" id="fullscreenBtn">🔳 Pantalla completa</button>
+<button class="control-btn" id="capturaBtn">📸 Captura</button>
+<button class="control-btn" id="sleepTimerBtn">⏰ Sleep Timer</button>
+</div>
+<!-- Agregar después del reproductor principal -->
+<div class="controles-volumen">
+<span>🔊</span>
+<input class="volumen-slider" id="volumenSlider" max="100" min="0" type="range" value="100"/>
+<span id="volumenTexto">100%</span>
+</div>
+</section>
+</main>
+<!-- Miniplayer flotante -->
+<div class="miniplayer" id="miniplayer" style="display: none;">
+<div class="miniplayer__header">
+<span id="miniplayerTitle">Canal</span>
+<div class="miniplayer__controls">
+<button id="miniplayerExpand">⛶</button>
+<button id="miniplayerClose">✕</button>
+</div>
+</div>
+<video class="miniplayer__video" controls="" id="miniVideo" muted=""></video>
+</div>
+<!-- Modal de temas -->
+<div class="modal" id="modalTemas" style="display:none;">
+<div class="modal__content">
+<h2>🎨 Seleccionar Tema</h2>
+<div class="temas-grid">
+<button class="tema-btn" data-tema="azul">💙 Azul Neón</button>
+<button class="tema-btn" data-tema="rojo">❤️ Rojo Fuego</button>
+<button class="tema-btn" data-tema="verde">💚 Verde Matrix</button>
+<button class="tema-btn" data-tema="purpura">💜 Púrpura Cyber</button>
+<button class="tema-btn" data-tema="dorado">💛 Dorado Lujo</button>
+<button class="tema-btn" data-tema="rosa">💗 Rosa Neon</button>
+</div>
+<button class="modal__button" onclick="document.getElementById('modalTemas').style.display='none'">Cerrar</button>
+</div>
+</div>
+<!-- Modal de historial -->
+<div class="modal" id="modalHistorial" style="display:none;">
+<div class="modal__content">
+<h2>📺 Historial de Canales</h2>
+<div class="historial-lista" id="historialLista">
+<!-- Se llena dinámicamente -->
+</div>
+<button class="modal__button" onclick="document.getElementById('modalHistorial').style.display='none'">Cerrar</button>
+</div>
+</div>
+<!-- Modal de atajos -->
+<div class="modal" id="modalAtajos" style="display:none;">
+<div class="modal__content">
+<h2>⌨️ Atajos de Teclado</h2>
+<div class="atajos-lista">
+<div class="atajo"><kbd>Espacio</kbd> - Play/Pausa</div>
+<div class="atajo"><kbd>↑</kbd> - Canal anterior</div>
+<div class="atajo"><kbd>↓</kbd> - Canal siguiente</div>
+<div class="atajo"><kbd>F</kbd> - Pantalla completa</div>
+<div class="atajo"><kbd>M</kbd> - Miniplayer</div>
+<div class="atajo"><kbd>H</kbd> - Historial</div>
+<div class="atajo"><kbd>T</kbd> - Cambiar tema</div>
+<div class="atajo"><kbd>?</kbd> - Mostrar atajos</div>
+</div>
+<button class="modal__button" onclick="document.getElementById('modalAtajos').style.display='none'">Cerrar</button>
+</div>
+</div>
+<footer class="footer" style="text-align:center; font-size:12px; color:#888; user-select: none;">
+  © 2025 Dzyurmekh – Página original. Prohibido su uso comercial sin autorización.
+  <button id="atajosBtn" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:10px;">⌨️ Atajos</button>
+</footer>
+<div class="modal" id="modalAcerca" style="display:none;">
+<div class="modal__content">
+<h2>Sobre esta App</h2>
+<p>Esta aplicación fue creada por <strong>Dzyurmekh</strong> © 2025.</p>
+<p>Se prohíbe su uso comercial sin autorización expresa del autor.</p>
+<p>GitHub: <a href="https://github.com/Dzyurmekh" style="color:lightblue;" target="_blank">@Dzyurmekh</a></p>
+<button class="modal__button" onclick="document.getElementById('modalAcerca').style.display='none'">Cerrar</button>
+</div>
+</div>
+<!-- Modal Sleep Timer -->
+<div class="modal" id="modalSleepTimer" style="display:none;">
+<div class="modal__content">
+<h2>⏰ Sleep Timer</h2>
+<div class="sleep-timer-controls">
+<button class="timer-btn" data-minutos="15">15 min</button>
+<button class="timer-btn" data-minutos="30">30 min</button>
+<button class="timer-btn" data-minutos="60">1 hora</button>
+<button class="timer-btn" data-minutos="120">2 horas</button>
+<div class="timer-custom">
+<input id="timerCustom" max="480" min="1" placeholder="Minutos" type="number"/>
+<button id="timerCustomBtn">Personalizado</button>
+</div>
+</div>
+<div class="timer-status" id="timerStatus"></div>
+<div class="modal-buttons">
+<button class="modal__button" id="cancelarTimer">Cancelar Timer</button>
+<button class="modal__button" onclick="document.getElementById('modalSleepTimer').style.display='none'">Cerrar</button>
+</div>
+</div>
+</div>
+<!-- Modal Listas Personalizadas -->
+<div class="modal" id="modalListas" style="display:none;">
+<div class="modal__content">
+<h2>📋 Mis Listas Personalizadas</h2>
+<div class="crear-lista">
+<input id="nombreNuevaLista" placeholder="Nombre de la nueva lista" type="text"/>
+<button id="crearListaBtn">➕ Crear Lista</button>
+</div>
+<div class="listas-container" id="listasContainer">
+<!-- Se llena dinámicamente -->
+</div>
+<button class="modal__button" onclick="document.getElementById('modalListas').style.display='none'">Cerrar</button>
+</div>
+</div>
+<!-- Modal Recomendaciones IA -->
+<div class="modal" id="modalRecomendaciones" style="display:none;">
+<div class="modal__content">
+<h2>🤖 Recomendaciones Inteligentes</h2>
+<div class="recomendaciones-info">
+<p>Basado en tu historial de visualización y preferencias</p>
+</div>
+<div class="recomendaciones-lista" id="recomendacionesLista">
+<!-- Se llena dinámicamente -->
+</div>
+<div class="recomendaciones-controles">
+<button class="modal__button" id="entrenarIA">🧠 Entrenar IA</button>
+<button class="modal__button" onclick="document.getElementById('modalRecomendaciones').style.display='none'">Cerrar</button>
+</div>
+</div>
+</div>
+<!-- Modal Multi-view -->
+<div class="modal" id="modalMultiview" style="display:none;">
+<div class="modal__content modal__content--large">
+<h2>🔄 Multi-view TV</h2>
+<div class="multiview-controles">
+<button class="multiview-btn" id="multiview2">📺 2 Canales</button>
+<button class="multiview-btn" id="multiview4">📺 4 Canales</button>
+<button class="multiview-btn" id="multiview6">📺 6 Canales</button>
+<button class="multiview-btn" id="cerrarMultiview">❌ Cerrar</button>
+</div>
+<div class="multiview-grid" id="multiviewGrid">
+<!-- Se llena dinámicamente -->
+</div>
+</div>
+</div>
+<!-- Modal EPG -->
+<div class="modal" id="modalEPG" style="display:none;">
+<div class="modal__content modal__content--large">
+<h2>📅 Guía de Programas (EPG)</h2>
+<div class="epg-controles">
+<button class="epg-btn active" id="epgHoy">📅 Hoy</button>
+<button class="epg-btn" id="epgManana">📅 Mañana</button>
+<button class="epg-btn" id="epgSemana">📅 Esta Semana</button>
+</div>
+<div class="epg-contenido" id="epgContenido">
+<!-- Se llena dinámicamente -->
+</div>
+<button class="modal__button" onclick="document.getElementById('modalEPG').style.display='none'">Cerrar</button>
+</div>
+</div>
+<script src="js/hls.min.js"></script>
+<script src="js/principal.js"></script>
+<script>
+  console.log("Este sitio fue creado por Dzyurmekh © 2025. Uso comercial prohibido.");
+  
+  // Registrar Service Worker para PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW registrado'))
+      .catch(err => console.log('SW error'));
+  }
+</script>
+</body>
+</html>
