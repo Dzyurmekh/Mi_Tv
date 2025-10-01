@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dzyurmekh.github.io/Mi_Tv/sitemap.xml
