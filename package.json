@@ -1,8 +1,9 @@
 {
-  "name": "my-v0-project",
+  "name": "mi-tv-personal",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "echo 'no build script'"
+    "start": "node server.js",
+    "build": "echo \"Static project: no build needed\""
   }
 }

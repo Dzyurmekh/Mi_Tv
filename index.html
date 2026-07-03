@@ -26,12 +26,25 @@ Año de creación: 2025
 <button class="panel-carga__button" id="cargarDesdeUrl">📡 Cargar desde URL</button>
 </div>
 <div class="top-controls__listas-recomendadas listas-recomendadas">
-<span class="listas-recomendadas__title">​▶️​ Listas recomendadas:</span>
-<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/countries/es.m3u">🇪🇸 España</button>
-<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/categories/news.m3u">🗞️ Noticias</button>
-<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/countries/ma.m3u">​🕋​ maghreb</button>
-<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/index.m3u">🌍 Global</button>
-<button class="listas-recomendadas__button recomendada" data-url="https://iptv-org.github.io/iptv/categories/sports.m3u">🏆​ Sport</button>
+<div class="selector-tv" id="selectorTV">
+<button class="selector-tv__trigger" id="selectorTVTrigger" type="button">
+<span class="selector-tv__icon">📺</span>
+<span>
+<strong>Tipo de TV</strong>
+<small id="selectorTVEstado">Busca un país</small>
+</span>
+<span class="selector-tv__arrow">⌄</span>
+</button>
+<div class="selector-tv__menu" aria-label="Seleccionar lista de television">
+<button class="selector-tv__cerrar" id="selectorTVCerrar" aria-label="Cerrar selector" type="button">×</button>
+<div class="selector-tv__buscador">
+<label for="paisBusqueda">País</label>
+<input autocomplete="off" id="paisBusqueda" placeholder="Escribe España, Marruecos, Francia..." type="search"/>
+<small id="paisContador">Cargando países...</small>
+</div>
+<div class="selector-tv__paises" id="paisesLista"></div>
+</div>
+</div>
 </div>
 <div class="top-controls__acciones-utiles acciones-utiles">
 <input class="acciones-utiles__input" id="busqueda" placeholder="🔍 Buscar canal..." type="text"/>

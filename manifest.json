@@ -2,7 +2,7 @@
   "name": "Mi TV Personal Interactiva",
   "short_name": "MiTV",
   "description": "Reproductor IPTV moderno con efectos neón",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#0a0a0f",
   "theme_color": "#00d4ff",
